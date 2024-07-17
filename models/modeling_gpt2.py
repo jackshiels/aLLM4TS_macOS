@@ -24,7 +24,7 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.utils.checkpoint
 from torch import nn
-from torch.cuda.amp import autocast
+from torch import autocast
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
 from transformers.activations import ACT2FN
@@ -661,7 +661,7 @@ DEPARALLELIZE_DOCSTRING = r"""
         3: [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35],
     }
     model.parallelize(device_map)  # Splits the model across several devices
-    model.deparallelize()  # Put the model back on cpu and cleans memory by calling torch.cuda.empty_cache()
+    model.deparallelize()  # Put the model back on cpu and cleans memory by calling torch.mps.empty_cache()
     ```
 """
 
@@ -733,7 +733,7 @@ class GPT2Model(GPT2PreTrainedModel):
         for index in range(len(self.h)):
             self.h[index] = self.h[index].to("cpu")
         self.ln_f = self.ln_f.to("cpu")
-        torch.cuda.empty_cache()
+        torch.mps.empty_cache()
 
     def get_input_embeddings(self):
         return self.wte
@@ -872,17 +872,6 @@ class GPT2Model(GPT2PreTrainedModel):
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
         all_hidden_states = () if output_hidden_states else None
         for i, (block, layer_past) in enumerate(zip(self.h, past_key_values)):
-            # Model parallel
-            if self.model_parallel:
-                torch.cuda.set_device(hidden_states.device)
-                # Ensure layer_past is on same device as hidden_states (might not be correct)
-                if layer_past is not None:
-                    layer_past = tuple(past_state.to(hidden_states.device) for past_state in layer_past)
-                # Ensure that attention_mask is always on the same device as hidden_states
-                if attention_mask is not None:
-                    attention_mask = attention_mask.to(hidden_states.device)
-                if isinstance(head_mask, torch.Tensor):
-                    head_mask = head_mask.to(hidden_states.device)
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
@@ -926,12 +915,6 @@ class GPT2Model(GPT2PreTrainedModel):
                 all_self_attentions = all_self_attentions + (outputs[2 if use_cache else 1],)
                 if self.config.add_cross_attention:
                     all_cross_attentions = all_cross_attentions + (outputs[3 if use_cache else 2],)
-
-            # Model Parallel: If it's the last layer for that device, put things on the next device
-            if self.model_parallel:
-                for k, v in self.device_map.items():
-                    if i == v[-1] and "cuda:" + str(k) != self.last_device:
-                        hidden_states = hidden_states.to("cuda:" + str(k + 1))
 
         hidden_states = self.ln_f(hidden_states)
 
@@ -1007,7 +990,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
         self.transformer = self.transformer.to("cpu")
         self.lm_head = self.lm_head.to("cpu")
         self.model_parallel = False
-        torch.cuda.empty_cache()
+        torch.mps.empty_cache()
 
     def get_output_embeddings(self):
         return self.lm_head
@@ -1099,11 +1082,6 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             return_dict=return_dict,
         )
         hidden_states = transformer_outputs[0]
-
-        # Set device for model parallelism
-        if self.model_parallel:
-            torch.cuda.set_device(self.transformer.first_device)
-            hidden_states = hidden_states.to(self.lm_head.weight.device)
 
         lm_logits = self.lm_head(hidden_states)
 
@@ -1203,7 +1181,7 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
         self.lm_head = self.lm_head.to("cpu")
         self.multiple_choice_head = self.multiple_choice_head.to("cpu")
         self.model_parallel = False
-        torch.cuda.empty_cache()
+        torch.mps.empty_cache()
 
     def get_output_embeddings(self):
         return self.lm_head
@@ -1316,11 +1294,6 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
         )
 
         hidden_states = transformer_outputs[0]
-
-        # Set device for model parallelism
-        if self.model_parallel:
-            torch.cuda.set_device(self.transformer.first_device)
-            hidden_states = hidden_states.to(self.lm_head.weight.device)
 
         lm_logits = self.lm_head(hidden_states)
         mc_logits = self.multiple_choice_head(hidden_states, mc_token_ids).squeeze(-1)

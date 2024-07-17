@@ -120,32 +120,23 @@ parser.add_argument('--use_amp', action='store_true', help='use automatic mixed 
 parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
 parser.add_argument('--gpu', type=int, default=0, help='gpu')
 parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple gpus', default=False)
-parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
+parser.add_argument('--devices', type=str, default='mps', help='device ids of multile gpus')
 parser.add_argument('--test_flop', action='store_true', default=False, help='See utils/tools for usage')
 
-
 if __name__ == '__main__':
-
-
     args = parser.parse_args()
 
     # random seed
     fix_seed = args.random_seed
     random.seed(fix_seed)
     torch.manual_seed(fix_seed)
-    torch.cuda.manual_seed_all(fix_seed)
+    torch.mps.manual_seed(fix_seed)
     np.random.seed(fix_seed)
 
-    
-
-
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-
-    if args.use_gpu and args.use_multi_gpu:
-        args.local_rank = int(os.environ["LOCAL_RANK"])
-        dist.init_process_group(backend="nccl")
-
-                
+    if (torch.backends.mps.is_available()):
+        device = torch.device("mps")
+        args.device = torch.device("mps")
+        args.use_gpu = True
 
     if args.task_name == 'long_term_forecast':
         Exp = Exp_Main
@@ -160,7 +151,6 @@ if __name__ == '__main__':
     else:
         Exp = Exp_Main
     
-
     if args.is_training:
         for ii in range(args.itr):
             setting = '{}_sl{}_pl{}_llml{}_lr{}_bs{}_percent{}_{}_{}'.format(
@@ -174,7 +164,6 @@ if __name__ == '__main__':
                 args.des,
                 ii,
                 )
-
 
             exp = Exp(args) 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
@@ -190,7 +179,7 @@ if __name__ == '__main__':
                 print('>>>>>>>predicting : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
                 exp.predict(setting, True)
 
-            torch.cuda.empty_cache()
+            torch.mps.empty_cache()
     else:
         ii = 0
         setting = '{}_sl{}_pl{}_llml{}_lr{}_bs{}_percent{}_{}_{}'.format(
@@ -208,4 +197,4 @@ if __name__ == '__main__':
         exp = Exp(args)  # set experiments
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.test(setting, test=1)
-        torch.cuda.empty_cache()
+        torch.mps.empty_cache()

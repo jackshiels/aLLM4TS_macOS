@@ -137,6 +137,8 @@ class Exp_Main(Exp_Basic):
         return total_loss
 
     def train(self, setting):
+        torch.backends.mps.enabled = True
+
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
@@ -144,11 +146,25 @@ class Exp_Main(Exp_Basic):
         x, y, x_mark, y_mark  = next(iter(test_loader))
         x=x.to(self.device, dtype=torch.float)
         y=y.to(self.device, dtype=torch.float)
+
         from torchinfo import summary
-        if "LLM4TS_sft_zero" == self.args.model:
-            summary(self.model, input_size=[x[:, -self.args.history_len:, :].size(), y.size()])
-        else:
-            summary(self.model, input_size=x.size())
+        try:
+            if "LLM4TS_sft_zero" == self.args.model:
+                summary(self.model, input_data=[x[:, -self.args.history_len:, :], y])
+            else:
+                summary(self.model, input_data=x)
+        except Exception as e:
+            print(f"Error in summary: {str(e)}")
+            # Try to run the forward pass manually
+            try:
+                with torch.no_grad():
+                    if "LLM4TS_sft_zero" == self.args.model:
+                        output = self.model(x[:, -self.args.history_len:, :], y)
+                    else:
+                        output = self.model(x)
+                print("Manual forward pass successful")
+            except Exception as e:
+                print(f"Error in manual forward pass: {str(e)}")
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
@@ -163,7 +179,7 @@ class Exp_Main(Exp_Basic):
         criterion = self._select_criterion()
 
         if self.args.use_amp:
-            scaler = torch.cuda.amp.GradScaler()
+            scaler = torch.GradScaler(device="mps")
             
         scheduler = lr_scheduler.OneCycleLR(optimizer = model_optim,
                                             steps_per_epoch = train_steps,
@@ -185,7 +201,7 @@ class Exp_Main(Exp_Basic):
                 batch_y = batch_y.to(self.device, dtype=torch.float)
 
                 if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
+                    with torch.autocast(device="mps"):
                         outputs = self.model(batch_x)
                     
                         f_dim = -1 if self.args.features == 'MS' else 0

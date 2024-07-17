@@ -54,7 +54,6 @@ class Model(nn.Module):
         self.in_layer = nn.Linear(self.patch_len, configs.d_model)
         self.out_layer = nn.Linear(configs.d_model, self.patch_len)
 
-
         if configs.freeze:
             if configs.c_pt:
                 layers_train = configs.pt_layers.split('_')

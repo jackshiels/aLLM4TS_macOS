@@ -45,19 +45,19 @@ class RevIN(nn.Module):
             x = x - self.last
         else:
             x = x - self.mean
-        x = x / self.stdev
+            x = x / self.stdev
         if self.affine:
-            x = x * self.affine_weight
-            x = x + self.affine_bias
+            x = x * self.affine_weight.to(x.device)
+            x = x + self.affine_bias.to(x.device)
         return x
 
     def _denormalize(self, x):
         if self.affine:
-            x = x - self.affine_bias
-            x = x / (self.affine_weight + self.eps*self.eps)
-        x = x * self.stdev
+            x = x - self.affine_bias.to(x.device)
+            x = x / (self.affine_weight.to(x.device) + self.eps*self.eps)
         if self.subtract_last:
             x = x + self.last
         else:
+            x = x * self.stdev
             x = x + self.mean
         return x
