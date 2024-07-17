@@ -1,6 +1,10 @@
 <div align="left">
-  <h1><b> aLLM4TS </b></h1>
+  <h1><b> aLLM4TS - macOS Fork </b></h1>
 </div>
+
+This is a fork of aLLM4T that uses mps architecture instead of CUDA/CPU. It's pretty hacky, but feel free to use the modifications herein. All credit for aLLM4TS remains with its authors. <b>Please see below for the original readme.</b>
+
+<hr>
 
 This repository contains the implementation of the ICML2024 paper "Multi-Patch Prediction: Adapting LLMs for Time Series Representation Learning" 
 
